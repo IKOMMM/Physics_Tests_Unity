@@ -1,22 +1,24 @@
-// Some stupid rigidbody based movement by Dani
-
 using System;
 using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour {
 
-    //Assingables
-    public Transform playerCam;
-    public Transform orientation;
-    
-    //Other
+    //To Assaign
+    [SerializeField] Transform playerCam;
+    [SerializeField] Transform orientation;
+       
+    //Character Rigidbody
     private Rigidbody rb;
 
-    //Rotation and look
+    //Rotation
     private float xRotation;
-    private float sensitivity = 50f;
-    private float sensMultiplier = 1f;
-    
+    private float sensitivity = 75f;
+    private float sensivityMultiplier = 1f;
+
+    //Input
+    float x, y;
+    bool jump, sprint, crouch;
+
     //Movement
     public float moveSpeed = 4500;
     public float maxSpeed = 20;
@@ -27,22 +29,18 @@ public class PlayerMovement : MonoBehaviour {
     private float threshold = 0.01f;
     public float maxSlopeAngle = 35f;
 
-    //Crouch & Slide
-    private Vector3 crouchScale = new Vector3(1, 0.5f, 1);
-    private Vector3 playerScale;
-    public float slideForce = 400;
-    public float slideCounterMovement = 0.2f;
-
-    //Jumping
+    //Jump
     private bool readyToJump = true;
     private float jumpCooldown = 0.25f;
     public float jumpForce = 550f;
-    
-    //Input
-    float x, y;
-    bool jumping, sprinting, crouching;
-    
-    //Sliding
+
+    //Crouch and Slide
+    private Vector3 playerScale;
+    private Vector3 crouchScale = new Vector3(1, 0.5f, 1);
+    public float slideForce = 450;
+    public float slideCounterMovement = 0.2f;     
+        
+    //Slide
     private Vector3 normalVector = Vector3.up;
     private Vector3 wallNormalVector;
 
@@ -55,7 +53,6 @@ public class PlayerMovement : MonoBehaviour {
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
-
     
     private void FixedUpdate() {
         Movement();
@@ -65,15 +62,11 @@ public class PlayerMovement : MonoBehaviour {
         MyInput();
         Look();
     }
-
-    /// <summary>
-    /// Find user input. Should put this in its own class but im lazy
-    /// </summary>
     private void MyInput() {
         x = Input.GetAxisRaw("Horizontal");
         y = Input.GetAxisRaw("Vertical");
-        jumping = Input.GetButton("Jump");
-        crouching = Input.GetKey(KeyCode.LeftControl);
+        jump = Input.GetButton("Jump");
+        crouch = Input.GetKey(KeyCode.LeftControl);
       
         //Crouching
         if (Input.GetKeyDown(KeyCode.LeftControl))
@@ -97,26 +90,27 @@ public class PlayerMovement : MonoBehaviour {
         transform.position = new Vector3(transform.position.x, transform.position.y + 0.5f, transform.position.z);
     }
 
-    private void Movement() {
-        //Extra gravity
-        rb.AddForce(Vector3.down * Time.deltaTime * 10);
+    private void Movement() {       
         
         //Find actual velocity relative to where player is looking
         Vector2 mag = FindVelRelativeToLook();
         float xMag = mag.x, yMag = mag.y;
 
+        //Gravity
+        rb.AddForce(Vector3.down * Time.deltaTime * 10);
+
         //Counteract sliding and sloppy movement
         CounterMovement(x, y, mag);
         
         //If holding jump && ready to jump, then jump
-        if (readyToJump && jumping) Jump();
+        if (readyToJump && jump) Jump();
 
         //Set max speed
         float maxSpeed = this.maxSpeed;
         
         //If sliding down a ramp, add force down so player stays grounded and also builds speed
-        if (crouching && grounded && readyToJump) {
-            rb.AddForce(Vector3.down * Time.deltaTime * 3000);
+        if (crouch && grounded && readyToJump) {
+            rb.AddForce(Vector3.down * Time.deltaTime * 2800);
             return;
         }
         
@@ -126,17 +120,17 @@ public class PlayerMovement : MonoBehaviour {
         if (y > 0 && yMag > maxSpeed) y = 0;
         if (y < 0 && yMag < -maxSpeed) y = 0;
 
-        //Some multipliers
+        //Multipliers
         float multiplier = 1f, multiplierV = 1f;
         
-        // Movement in air
+        //Movement in air
         if (!grounded) {
             multiplier = 0.5f;
             multiplierV = 0.5f;
         }
         
-        // Movement while sliding
-        if (grounded && crouching) multiplierV = 0f;
+        //Movement while slide
+        if (grounded && crouch) multiplierV = 0f;
 
         //Apply forces to move player
         rb.AddForce(orientation.transform.forward * y * moveSpeed * Time.deltaTime * multiplier * multiplierV);
@@ -168,8 +162,8 @@ public class PlayerMovement : MonoBehaviour {
     
     private float desiredX;
     private void Look() {
-        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
-        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
+        float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.fixedDeltaTime * sensivityMultiplier;
+        float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.fixedDeltaTime * sensivityMultiplier;
 
         //Find current look rotation
         Vector3 rot = playerCam.transform.localRotation.eulerAngles;
@@ -185,10 +179,10 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     private void CounterMovement(float x, float y, Vector2 mag) {
-        if (!grounded || jumping) return;
+        if (!grounded || jump) return;
 
         //Slow down sliding
-        if (crouching) {
+        if (crouch) {
             rb.AddForce(moveSpeed * Time.deltaTime * -rb.velocity.normalized * slideCounterMovement);
             return;
         }
@@ -209,11 +203,6 @@ public class PlayerMovement : MonoBehaviour {
         }
     }
 
-    /// <summary>
-    /// Find the velocity relative to where the player is looking
-    /// Useful for vectors calculations regarding movement and limiting movement
-    /// </summary>
-    /// <returns></returns>
     public Vector2 FindVelRelativeToLook() {
         float lookAngle = orientation.transform.eulerAngles.y;
         float moveAngle = Mathf.Atan2(rb.velocity.x, rb.velocity.z) * Mathf.Rad2Deg;
@@ -233,13 +222,10 @@ public class PlayerMovement : MonoBehaviour {
         return angle < maxSlopeAngle;
     }
 
-    private bool cancellingGrounded;
-    
-    /// <summary>
-    /// Handle ground detection
-    /// </summary>
+    private bool cancellingGrounded;    
+
     private void OnCollisionStay(Collision other) {
-        //Make sure we are only checking for walkable layers
+        //Only checking for walkable layers
         int layer = other.gameObject.layer;
         if (whatIsGround != (whatIsGround | (1 << layer))) return;
 
